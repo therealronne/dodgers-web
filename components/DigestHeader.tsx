@@ -2,12 +2,11 @@
 
 interface Props {
   date: string;
-  cached: boolean;
   onRefresh: () => void;
   isRefreshing: boolean;
 }
 
-export function DigestHeader({ date, cached, onRefresh, isRefreshing }: Props) {
+export function DigestHeader({ date, onRefresh, isRefreshing }: Props) {
   const formatted = new Date(date + "T12:00:00Z").toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -39,12 +38,8 @@ export function DigestHeader({ date, cached, onRefresh, isRefreshing }: Props) {
         {/* Refresh row */}
         <div className="flex items-center gap-3 mt-5 ml-11">
           <span className="text-xs text-blue-200 flex items-center gap-1.5">
-            <span
-              className={`inline-block w-2 h-2 rounded-full ${
-                cached ? "bg-green-400" : "bg-yellow-400"
-              }`}
-            />
-            {cached ? "Showing cached results" : "Freshly fetched"}
+            <span className="inline-block w-2 h-2 rounded-full bg-green-400" />
+            Updated daily · AI-summarized
           </span>
           <button
             onClick={onRefresh}

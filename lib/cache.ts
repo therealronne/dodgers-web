@@ -1,49 +1,39 @@
-import { promises as fs } from "fs";
-import path from "path";
-import type { DigestCache, Story } from "./types";
+/**
+ * Cache layer using Next.js Data Cache (unstable_cache).
+ * Works on Vercel without any external storage — the cache persists
+ * across serverless invocations via Vercel's Data Cache.
+ *
+ * revalidate: 86400 = 24-hour stale-while-revalidate window.
+ * tag: "digest" lets /api/refresh bust the cache on demand.
+ */
 
-const CACHE_DIR = path.join(process.cwd(), ".cache");
-const CACHE_FILE = path.join(CACHE_DIR, "digest.json");
+import { unstable_cache, revalidatePath } from "next/cache";
+import { fetchAllStories } from "./fetcher";
+import { deduplicateStories } from "./deduplicator";
+import { summarizeStories } from "./summarizer";
+import type { Story } from "./types";
 
-function todayKey(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD in UTC
+const REVALIDATE_SECONDS = 86_400; // 24 hours
+
+async function buildDigest(): Promise<Story[]> {
+  console.log("[cache] Building fresh digest...");
+  const raw = await fetchAllStories();
+  console.log(`[cache] Fetched ${raw.length} raw stories`);
+  const deduped = deduplicateStories(raw);
+  console.log(`[cache] After dedup: ${deduped.length} stories`);
+  const stories = await summarizeStories(deduped);
+  console.log(`[cache] Summarized ${stories.length} stories`);
+  return stories;
 }
 
-async function ensureDir(): Promise<void> {
-  await fs.mkdir(CACHE_DIR, { recursive: true });
-}
+export const getCachedDigest = unstable_cache(
+  buildDigest,
+  ["dodgers-digest"],
+  { revalidate: REVALIDATE_SECONDS }
+);
 
-export async function readCache(): Promise<Story[] | null> {
-  try {
-    await ensureDir();
-    const raw = await fs.readFile(CACHE_FILE, "utf-8");
-    const cached: DigestCache = JSON.parse(raw);
-    if (cached.date === todayKey()) {
-      console.log("[cache] Cache hit for", cached.date);
-      return cached.stories;
-    }
-    console.log("[cache] Cache expired (was", cached.date, ", today is", todayKey(), ")");
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export async function writeCache(stories: Story[]): Promise<void> {
-  await ensureDir();
-  const data: DigestCache = {
-    date: todayKey(),
-    stories,
-    fetchedAt: new Date().toISOString(),
-  };
-  await fs.writeFile(CACHE_FILE, JSON.stringify(data, null, 2), "utf-8");
-  console.log("[cache] Wrote cache for", data.date, "with", stories.length, "stories");
-}
-
-export async function invalidateCache(): Promise<void> {
-  try {
-    await fs.unlink(CACHE_FILE);
-  } catch {
-    // ignore
-  }
+/** Bust the cache so the next getCachedDigest call re-fetches. */
+export function invalidateDigestCache(): void {
+  // Revalidate the root layout's data cache, which covers unstable_cache entries.
+  revalidatePath("/", "layout");
 }

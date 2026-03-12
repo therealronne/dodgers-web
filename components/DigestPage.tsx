@@ -9,13 +9,11 @@ import { EmailSignup } from "./EmailSignup";
 
 interface DigestResponse {
   stories: Story[];
-  cached: boolean;
   error?: string;
 }
 
 export function DigestPage() {
   const [stories, setStories] = useState<Story[]>([]);
-  const [cached, setCached] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState<Category | "All">("All");
@@ -29,7 +27,6 @@ export function DigestPage() {
       const data: DigestResponse = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Unknown error");
       setStories(data.stories);
-      setCached(data.cached);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -67,7 +64,6 @@ export function DigestPage() {
     <div className="min-h-screen bg-slate-50">
       <DigestHeader
         date={todayKey}
-        cached={cached}
         onRefresh={handleRefresh}
         isRefreshing={isRefreshing}
       />

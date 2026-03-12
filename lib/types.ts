@@ -26,8 +26,3 @@ export interface Story {
   imageUrl?: string;
 }
 
-export interface DigestCache {
-  date: string; // YYYY-MM-DD
-  stories: Story[];
-  fetchedAt: string; // ISO string
-}

@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
-import { invalidateCache } from "@/lib/cache";
-import { fetchAllStories } from "@/lib/fetcher";
-import { deduplicateStories } from "@/lib/deduplicator";
-import { summarizeStories } from "@/lib/summarizer";
-import { writeCache } from "@/lib/cache";
+import { invalidateDigestCache, getCachedDigest } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST() {
   try {
-    await invalidateCache();
-
-    const raw = await fetchAllStories();
-    const deduped = deduplicateStories(raw);
-    const stories = await summarizeStories(deduped);
-    await writeCache(stories);
-
+    // Bust the cache tag so the next getCachedDigest call re-fetches
+    invalidateDigestCache();
+    const stories = await getCachedDigest();
     return NextResponse.json({ success: true, count: stories.length });
   } catch (err) {
     console.error("[api/refresh] Error:", err);
