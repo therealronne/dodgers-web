@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { invalidateDigestCache, getCachedDigest } from "@/lib/cache";
+import { buildDigest } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST() {
   try {
-    // Bust the cache tag so the next getCachedDigest call re-fetches
-    invalidateDigestCache();
-    const stories = await getCachedDigest();
+    const stories = await buildDigest();
     return NextResponse.json({ success: true, count: stories.length });
   } catch (err) {
     console.error("[api/refresh] Error:", err);

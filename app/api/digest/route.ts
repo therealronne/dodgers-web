@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getCachedDigest } from "@/lib/cache";
+import { buildDigest } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET() {
   try {
-    const stories = await getCachedDigest();
+    const stories = await buildDigest();
     return NextResponse.json({ stories });
   } catch (err) {
     console.error("[api/digest] Error:", err);

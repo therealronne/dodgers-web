@@ -94,7 +94,7 @@ function isDodgersRelated(title: string, keywords: string[]): boolean {
 async function fetchFromSource(source: FeedSource): Promise<RawStory[]> {
   try {
     const feed = await parser.parseURL(source.rssUrl);
-    const cutoff = Date.now() - 48 * 60 * 60 * 1000; // 48 hours
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000; // 7 days
 
     const stories: RawStory[] = [];
 
