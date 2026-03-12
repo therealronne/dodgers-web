@@ -1,3 +1,4 @@
+import Anthropic from "@anthropic-ai/sdk";
 import type { RawStory, Story, Category } from "./types";
 import { createHash } from "crypto";
 
@@ -39,23 +40,58 @@ function storyId(story: RawStory): string {
   return createHash("md5").update(story.url).digest("hex").slice(0, 8);
 }
 
-export function summarizeStories(raw: RawStory[]): Story[] {
-  const stories: Story[] = raw.slice(0, 20).map((s) => {
-    const category = categorize(s.title, s.snippet ?? "");
-    const summary = s.snippet?.trim().slice(0, 300) || "Click to read the full story.";
+async function aiSummary(client: Anthropic, story: RawStory): Promise<string> {
+  const text = story.snippet?.slice(0, 800) ?? "";
+  const prompt = text
+    ? `Summarize this Dodgers news in 2 sentences. Be specific.\n\nTitle: ${story.title}\n\n${text}`
+    : `Summarize this Dodgers headline in 2 sentences.\n\nTitle: ${story.title}`;
 
-    return {
-      id: storyId(s),
-      title: s.title,
-      url: s.url,
-      source: s.source,
-      publishedAt: s.publishedAt.toISOString(),
-      summary,
-      category,
-      relevanceScore: computeRelevance(s, category),
-    };
+  const msg = await client.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 120,
+    messages: [{ role: "user", content: prompt }],
   });
 
-  stories.sort((a, b) => b.relevanceScore - a.relevanceScore);
-  return stories.slice(0, 12);
+  const block = msg.content[0];
+  return block.type === "text" ? block.text.trim() : "";
+}
+
+export async function summarizeStories(raw: RawStory[]): Promise<Story[]> {
+  // Sort by relevance first so we only summarize the stories we'll actually show
+  const top = raw.slice(0, 20).map((s) => ({
+    story: s,
+    category: categorize(s.title, s.snippet ?? ""),
+    relevanceScore: computeRelevance(s, categorize(s.title, s.snippet ?? "")),
+  }));
+  top.sort((a, b) => b.relevanceScore - a.relevanceScore);
+  const picked = top.slice(0, 10);
+
+  // Try AI summarization — all in parallel with a 10s hard deadline
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  let summaries: (string | null)[] = picked.map(() => null);
+
+  if (apiKey) {
+    const client = new Anthropic({ apiKey });
+    const results = await Promise.race([
+      Promise.allSettled(picked.map(({ story }) => aiSummary(client, story))),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
+    ]);
+
+    if (results) {
+      summaries = results.map((r) =>
+        r.status === "fulfilled" && r.value ? r.value : null
+      );
+    }
+  }
+
+  return picked.map(({ story, category, relevanceScore }, i) => ({
+    id: storyId(story),
+    title: story.title,
+    url: story.url,
+    source: story.source,
+    publishedAt: story.publishedAt.toISOString(),
+    summary: summaries[i] ?? story.snippet?.trim().slice(0, 300) ?? "Click to read the full story.",
+    category,
+    relevanceScore,
+  }));
 }
