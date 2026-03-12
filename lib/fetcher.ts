@@ -1,5 +1,4 @@
 import Parser from "rss-parser";
-import * as cheerio from "cheerio";
 import type { RawStory } from "./types";
 
 const parser = new Parser({
@@ -49,41 +48,6 @@ const FEED_SOURCES: FeedSource[] = [
   },
 ];
 
-async function fetchArticleContent(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (compatible; DodgersDigest/1.0)",
-      },
-    });
-    if (!res.ok) return "";
-    const html = await res.text();
-    const $ = cheerio.load(html);
-
-    // Remove noise
-    $("script, style, nav, footer, header, aside, .ad, .advertisement, .sidebar").remove();
-
-    // Try common article content selectors
-    const selectors = [
-      "article",
-      '[class*="article-body"]',
-      '[class*="story-body"]',
-      '[class*="post-content"]',
-      "main p",
-      ".content p",
-    ];
-    for (const sel of selectors) {
-      const text = $(sel).text().trim();
-      if (text.length > 200) return text.slice(0, 2000);
-    }
-
-    return $("body").text().replace(/\s+/g, " ").trim().slice(0, 2000);
-  } catch {
-    return "";
-  }
-}
 
 function isDodgersRelated(title: string, keywords: string[]): boolean {
   if (keywords.length === 0) return true;
@@ -138,16 +102,6 @@ export async function fetchAllStories(): Promise<RawStory[]> {
   for (const r of results) {
     if (r.status === "fulfilled") all.push(...r.value);
   }
-
-  // Enrich top stories with article content (limit to avoid too many requests)
-  const topStories = all.slice(0, 15);
-  await Promise.allSettled(
-    topStories.map(async (story) => {
-      if (!story.snippet || story.snippet.length < 100) {
-        story.content = await fetchArticleContent(story.url);
-      }
-    })
-  );
 
   return all;
 }
